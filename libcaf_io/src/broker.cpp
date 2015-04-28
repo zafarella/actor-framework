@@ -66,6 +66,7 @@ broker::scribe::scribe(broker* ptr, connection_handle conn_hdl)
       m_hdl(conn_hdl) {
   std::vector<char> tmp;
   m_read_msg = make_message(new_data_msg{m_hdl, std::move(tmp)});
+  m_sent_msg = make_message(data_sent_msg{m_hdl, 0});
 }
 
 void broker::scribe::remove_from_broker() {
@@ -92,11 +93,25 @@ void broker::scribe::consume(const void*, size_t num_bytes) {
   }
   auto& buf = rd_buf();
   buf.resize(num_bytes);                       // make sure size is correct
-  read_msg().buf.swap(buf);                    // swap into message
+  dread_msg().buf.swap(buf);                    // swap into message
   m_broker->invoke_message(invalid_actor_addr, // call client
                            invalid_message_id, m_read_msg);
-  read_msg().buf.swap(buf); // swap buffer back to stream
+  dread_msg().buf.swap(buf); // swap buffer back to stream
   flush();                  // implicit flush of wr_buf()
+}
+
+void broker::scribe::written(size_t num_bytes) {
+  CAF_LOG_TRACE(CAF_ARG(num_bytes));
+  if (m_disconnected) {
+    // we are already disconnected from the broker while the multiplexer
+    // did not yet remove the socket, this can happen if an IO event causes
+    // the broker to call close_all() while the pollset contained
+    // further activities for the broker
+    return;
+  }
+  dsent_msg().num_bytes = num_bytes;
+  m_broker->invoke_message(invalid_actor_addr, // call client
+                           invalid_message_id, m_sent_msg);
 }
 
 void broker::scribe::io_failure(network::operation op) {

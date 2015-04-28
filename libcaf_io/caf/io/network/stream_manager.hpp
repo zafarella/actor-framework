@@ -40,6 +40,11 @@ class stream_manager : public manager {
    * Called by the underlying IO device whenever it received data.
    */
   virtual void consume(const void* data, size_t num_bytes) = 0;
+
+  /**
+   * Called by the underlying IO device whenever it sent data.
+   */
+  virtual void written(size_t num_bytes) = 0;
 };
 
 } // namespace network

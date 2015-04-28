@@ -86,6 +86,34 @@ inline bool operator!=(const new_data_msg& lhs, const new_data_msg& rhs) {
 }
 
 /**
+ * Signalizes data was successfully sent.
+ */
+struct data_sent_msg {
+  /**
+   * Handle to the related connection.
+   */
+  connection_handle handle;
+  /**
+   * The number of bytes sent.
+   */
+  size_t num_bytes;
+};
+
+/**
+ * @relates data_sent_msg
+ */
+inline bool operator==(const data_sent_msg& lhs, const data_sent_msg& rhs) {
+  return lhs.handle == rhs.handle && lhs.num_bytes == rhs.num_bytes;
+}
+
+/**
+ * @relates data_sent_msg
+ */
+inline bool operator!=(const data_sent_msg& lhs, const data_sent_msg& rhs) {
+  return !(lhs == rhs);
+}
+
+/**
  * Signalizes that a {@link broker} connection has been closed.
  */
 struct connection_closed_msg {

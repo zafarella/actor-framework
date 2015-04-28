@@ -121,12 +121,12 @@ class broker : public abstract_event_based_actor<behavior, false> {
    protected:
     virtual buffer_type& rd_buf() = 0;
 
-    inline new_data_msg& read_msg() {
+    inline new_data_msg& dread_msg() {
       return m_read_msg.get_as_mutable<new_data_msg>(0);
     }
 
-    inline const new_data_msg& read_msg() const {
-      return m_read_msg.get_as<new_data_msg>(0);
+    inline data_sent_msg& dsent_msg() {
+      return m_sent_msg.get_as_mutable<data_sent_msg>(0);
     }
 
     void remove_from_broker() override;
@@ -135,9 +135,12 @@ class broker : public abstract_event_based_actor<behavior, false> {
 
     void consume(const void* data, size_t num_bytes) override;
 
+    void written(size_t num_bytes) override;
+
     connection_handle m_hdl;
 
     message m_read_msg;
+    message m_sent_msg;
   };
 
   using scribe_pointer = intrusive_ptr<scribe>;

@@ -562,14 +562,15 @@ class stream : public event_handler {
       case operation::write: {
         size_t wb; // written bytes
         if (!write_some(wb, m_sock.fd(),
-                m_wr_buf.data() + m_written,
-                m_wr_buf.size() - m_written)) {
+                        m_wr_buf.data() + m_written,
+                        m_wr_buf.size() - m_written)) {
           m_writer->io_failure(operation::write);
           backend().del(operation::write, m_sock.fd(), this);
-        }
-        else if (wb > 0) {
+        } else if (wb > 0) {
           m_written += wb;
           if (m_written >= m_wr_buf.size()) {
+            // tell client we're done with this buffer
+            m_writer->written(m_written);
             // prepare next send (or stop sending)
             write_loop();
           }

@@ -100,6 +100,16 @@ inline void deserialize_impl(new_data_msg& msg, deserializer* source) {
   source->read_raw(msg.buf.size(), msg.buf.data());
 }
 
+inline void serialize_impl(const data_sent_msg& msg, serializer* sink) {
+  serialize_impl(msg.handle, sink);
+  sink->write_value(static_cast<uint64_t>(msg.num_bytes));
+}
+
+inline void deserialize_impl(data_sent_msg& msg, deserializer* source) {
+  deserialize_impl(msg.handle, source);
+  msg.num_bytes = source->read<uint64_t>();
+}
+
 // connection_closed_msg & acceptor_closed_msg have the same fields
 template <class T>
 typename std::enable_if<std::is_same<T, connection_closed_msg>::value
@@ -351,6 +361,7 @@ void middleman::initialize() {
   m_backend->thread_id(m_thread.get_id());
   // announce io-related types
   do_announce<new_data_msg>("caf::io::new_data_msg");
+  do_announce<data_sent_msg>("caf::io::data_sent_msg");
   do_announce<new_connection_msg>("caf::io::new_connection_msg");
   do_announce<acceptor_closed_msg>("caf::io::acceptor_closed_msg");
   do_announce<connection_closed_msg>("caf::io::connection_closed_msg");
