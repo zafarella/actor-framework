@@ -1,0 +1,170 @@
+\section{Message Passing}
+\label{message-passing}
+
+Message passing in CAF is always asynchronous. Further, CAF neither guarantees message delivery nor message ordering in a distributed setting. CAF uses TCP per default, but also enables nodes to send messages to other nodes without having a direct connection.  In this case, messages are forwarded by intermediate nodes and can get lost if one of the forwarding nodes fails. Likewise, forwarding paths can change dynamically and thus cause messages to arrive out of order.
+
+The messaging layer of CAF has three primitives for sending messages: \lstinline^send^, \lstinline^request^, and \lstinline^delegate^. The former simply enqueues a message to the mailbox the receiver. The latter two are discussed in more detail in \sref{request} and \sref{delegate}.
+
+\subsection{Structure of Mailbox Elements}
+\label{mailbox-element}
+
+When enqueuing a message to the mailbox of an actor, \lib wraps the content of the message into a \lstinline^mailbox_element^ (shown below) to add meta data and processing paths.
+
+{\footnotesize
+\begin{verbatim}
+     +-----------------+
+     | mailbox_element |
+     +-----------------+
+     | sender          |
+     | message ID      |
+     | stages          |
+     | content         |
+     +-----------------+
+\end{verbatim}}
+
+The sender is stored as a \lstinline^strong_actor_ptr^ \see{actor-pointer} and denotes the origin of the message. The message ID is either 0---invalid---or a positive integer value that allows the sender to match a response to its request. The \lstinline^stages^ vector stores the path of the message. Response messages, i.e., the returned values of a message handler, are sent to \lstinline^stages.back()^ after calling \lstinline^stages.pop_back()^. This allows \lib to build pipelines of arbitrary size. If no more stage is left, the response reaches the sender. Finally, \lstinline^content^ is a \lstinline^message^ object~\see{message} storing a type-erased tuple.
+
+Mailbox elements are created by \lib automatically and are usually invisible to the programmer. However, understanding how messages are processed internally helps understanding the behavior of the message passing layer.
+
+It is worth mentioning that \lib usually wraps the mailbox element and its content into a single object in order to reduce the number of memory allocations.
+
+\subsection{System Messages}
+\label{system-message}
+
+\lib has three system-level message types that every actor must handle regardless of its current state. These three message types are accepted by all actors and thus implicitly part of all messaging interfaces~\see{interface}. Consequently, system messages are not handled by regular message handlers.
+
+\subsubsection{Down Messages}
+\label{down-message}
+
+Actors can monitor the lifetime of other actors by calling \lstinline^self->monitor(other)^. This will cause the runtime system of \lib to send a \lstinline^down_msg^ for \lstinline^other^ if it dies. Actors drop down messages unless they provide a custom handler via \lstinline^set_down_handler(f)^, where \lstinline^f^ is a function object with signature \lstinline^void (down_message&)^ or \lstinline^void (local_actor*, down_message&)^. The latter signature allows users to implement down message handlers as free function.
+
+\subsubsection{Exit Messages}
+\label{exit-message}
+
+Bidirectional monitoring with a strong lifetime coupling is established by calling \lstinline^self->link_to(other)^. This will cause the runtime to send an \lstinline^exit_msg^ if either \lstinline^this^ or \lstinline^other^ dies. Per default, actors terminate after receiving an \lstinline^exit_msg^ unless the exit reason is \lstinline^exit_reason::normal^. This mechanism propagates failure states in an actor system. Linked actors form a sub system in which an error causes all actors to fail collectively. Actors can override the default handler via \lstinline^set_exit_handler(f)^, where \lstinline^f^ is a function object with signature \lstinline^void (exit_message&)^ or \lstinline^void (local_actor*, exit_message&)^.
+
+\subsubsection{Error Messages}
+\label{error-message}
+
+Actors send error messages to others by returning an \lstinline^error^~\see{error} from a message handler. Similar to exit messages, error messages usually cause the receiving actor to terminate, unless a custom handler was installed via \lstinline^set_error_handler(f)^, where \lstinline^f^ is a function object with signature \lstinline^void (error&)^ or \lstinline^void (local_actor*, error&)^. Additionally, \lstinline^request^ accepts an error handler as second argument to handle errors for a particular request~\see{error-response}. The default handler is used as fallback if \lstinline^request^ is used without error handler. 
+
+\subsection{Requests}
+\label{request}
+
+A main feature of \lib is its ability to couple input and output types via the type system. For example, a \lstinline^typed_actor<replies_to<int>::with<int>>^ essentially behaves like a function. It receives a single \lstinline^int^ as input and responds with another \lstinline^int^. \lib embraces this functional take on actors by simply creating response messages from the result of message handlers. This allows \lib to match \emph{request} to \emph{response} messages and to provide a convenient API for this style of communication.
+
+\subsubsection{Sending Requests and Handling Responses}
+\label{handling-response}
+
+Actors send request messages by calling \lstinline^request(receiver, timeout, content...)^. This function returns an intermediate object that allows an actor to set a one-shot handler for the response message. Event-based actors can use either \lstinline^request(...).then^ or \lstinline^request(...).await^. The former multiplexes the one-shot handler with the regular actor behavior and handles requests as they arrive. The latter suspends the regular actor behavior until all awaited responses arrive and handles requests in LIFO order. Blocking actors always use \lstinline^request(...).receive^, which blocks until the one-shot handler was called. Actors receive a \lstinline^sec::request_timeout^~\see{sec} error message~\see{error-message} if a timeout occurs. Users can set the timeout to \lstinline^infinite^ for unbound operations. This is only recommended if the receiver is running locally.
+
+\clearpage
+In our following example, we use the simple cell actors shown below as communication endpoints.
+
+\lstinputlisting[firstline=20,lastline=37]{../examples/message_passing/request.cpp}
+
+The first part of the example illustrates how event-based actors can use either \lstinline^then^ or \lstinline^await^.
+
+\lstinputlisting[firstline=39,lastline=51]{../examples/message_passing/request.cpp}
+
+The second half of the example shows a blocking actor making use of \lstinline^receive^.
+
+\lstinputlisting[firstline=53,lastline=58]{../examples/message_passing/request.cpp}
+
+We spawn five cells and assign the values 0, 1, 4, 9, and 16.
+
+\lstinputlisting[firstline=62,lastline=64]{../examples/message_passing/request.cpp}
+
+When passing the \lstinline^cells^ vector to our three different implementations, we observe three outputs. Our \lstinline^waiting_testee^ actor will always print:
+
+{\footnotesize\begin{verbatim}
+cell #9 -> 16
+cell #8 -> 9
+cell #7 -> 4
+cell #6 -> 1
+cell #5 -> 0
+\end{verbatim}}
+
+This is because \lstinline^await^ puts the one-shots handlers onto a stack and enforces LIFO order by re-ordering incoming response messages.
+
+The \lstinline^multiplexed_testee^ implementation does not print its results in a predicable order. Response messages arrive in arbitrary order and are handled immediately.
+
+Finally, the \lstinline^blocking_testee^ implementation will always print:
+
+{\footnotesize\begin{verbatim}
+cell #5 -> 0
+cell #6 -> 1
+cell #7 -> 4
+cell #8 -> 9
+cell #9 -> 16
+\end{verbatim}}
+
+Both event-based approaches send all requests, install a series of one-shot handlers, and then return from the implementing function. In contrast, the blocking function waits for a response before sending another request.
+
+\subsubsection{Error Handling in Requests}
+\label{error-response}
+
+Requests allow \lib to unambiguously correlate request and response messages. This is also true if the response is an error message. Hence, \lib allows to add an error handler as optional second parameter to \lstinline^then^, \lstinline^await^, or \lstinline^receive^. If no such handler is defined, the default error handler \see{error-message} is used as a fallback.
+
+As an example, we consider a simple divider that returns an error on a division by zero. This examples uses a custom error category~\see{error}.
+
+\lstinputlisting[linerange={19-25,35-48}]{../examples/message_passing/divider.cpp}
+
+\clearpage
+When sending requests to the divider, we can now use custom error handlers to report errors to the user.
+
+\lstinputlisting[linerange={65-73}]{../examples/message_passing/divider.cpp}
+
+\subsection{Delaying Messages}
+
+Messages can be delayed by using the function \lstinline^delayed_send^, as illustrated in the following time-based loop example. 
+
+\lstinputlisting[linerange={56-75}]{../examples/message_passing/dancing_kirby.cpp}
+
+\clearpage
+\subsection{Delegating Messages}
+\label{delegate}
+
+Actors can transfer responsibility for a request by using \lstinline^delegate^. This enables the receiver of the delegated message to reply as usual---by simply returning a value from its message handler---and the original sender of the message will receive the response. The following diagram illustrates forwarding of a synchronous message from actor B to actor C.
+
+\begin{footnotesize}
+\begin{verbatim}
+               A                  B                  C
+               |                  |                  |
+               | ---(request)---> |                  |
+               |                  | ---(delegate)--> |
+               |                  X                  |---\
+               |                                     |   | compute
+               |                                     |   | result
+               |                                     |<--/
+               | <-------------(reply)-------------- |
+               |                                     X
+               |---\
+               |   | handle
+               |   | response
+               |<--/
+               |
+               X
+\end{verbatim}
+\end{footnotesize}
+
+Returning the result of \lstinline^delegate(...)^ from a message handler, as shown in the example below, suppresses the implicit response message and allows the compiler to check the result type when using statically typed actors.
+
+\lstinputlisting[linerange={15-42}]{../examples/message_passing/delegating.cpp}
+
+\subsection{Response Promises}
+\label{promise}
+
+Response promises allow an actor to send and receive other messages prior to replying to a particular request. Actors create a response promise using \lstinline^self->make_response_promise<Ts>()^, where \lstinline^Ts^ is a template parameter pack describing the promised return type. Dynamically typed actors simply call \lstinline^self->make_response_promise()^. After retrieving a promise, an actor can fulfill it by calling the member function \lstinline^deliver(...)^, as shown in the following example.
+
+\lstinputlisting[linerange={18-43}]{../examples/message_passing/promises.cpp}
+
+\clearpage
+\subsection{Message Priorities}
+
+By default, all messages have the same priority and actors ignore priority flags.
+Actors that should evaluate priorities must be spawned using the \lstinline^priority_aware^ flag, as shown in the following example.
+This flag causes the actor to use a priority-aware mailbox implementation.
+It is not possible to change this implementation dynamically at runtime.
+
+\lstinputlisting{../examples/message_passing/prioritizing.cpp}

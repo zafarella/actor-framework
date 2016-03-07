@@ -1,0 +1,115 @@
+\section{Configuring Actor Applications}
+\label{system-config}
+
+\lib configures applications at startup using an \lstinline^actor_system_config^ or a user-defined subclass of that type. The config objects allow users to add custom types, to load modules, and to fine-tune the behavior of loaded modules with command line options or configuration files~\see{system-config-options}.
+
+The following code example is a minimal CAF application without any custom configuration options.
+
+\begin{lstlisting}
+void caf_main(actor_system& system) {
+  // ...
+}
+CAF_MAIN(io::middleman)
+\end{lstlisting}
+
+The compiler expands this example code to the following.
+
+\begin{lstlisting}
+void caf_main(actor_system& system) {
+  // ...
+}
+int main(int argc, char** argv) {
+  return exec_main<io::middleman>(caf_main, argc, argv);
+}
+\end{lstlisting}
+
+The function \lstinline^exec_main^ creates a config object, loads all modules requested in \lstinline^CAF_MAIN^ and then calls \lstinline^caf_main^. A minimal implementation for \lstinline^main^ performing all these steps manually is shown in the next example for the sake of completeness.
+
+\begin{lstlisting}
+int main(int argc, char** argv) {
+  actor_system_config cfg;
+  // read CLI options
+  cfg.parse(argc, argv);
+  // return immediately if a help text was printed
+  if (cfg.cli_helptext_printed)
+    return 0;
+  // load modules
+  cfg.load<io::middleman>();
+  // create actor system and call caf_main
+  actor_system system{cfg};
+  caf_main(cfg);
+}
+\end{lstlisting}
+
+However, setting up config objects by hand is usually not necessary. \lib automatically selects user-defined subclasses of \lstinline^actor_system_config^ if \lstinline^caf_main^ takes a second parameter by reference, as shown in the minimal example below.
+
+\begin{lstlisting}
+class my_config : public actor_system_config {
+public:
+  void init() override {
+    // ...
+  }
+};
+
+void caf_main(actor_system& system, const my_config& cfg) {
+  // ...
+}
+
+CAF_MAIN()
+\end{lstlisting}
+
+Users can perform additional initialization, add custom program options, etc. by overriding \lstinline^init^.
+
+\subsection{Loading Modules}
+\label{system-config-module}
+
+The simplest way to load modules is to use the macro \lstinline^CAF_MAIN^ and pass a list of all requested modules, as sown below.
+
+\begin{lstlisting}
+void caf_main(actor_system& system) {
+  // ...
+}
+CAF_MAIN(mod1, mod2, ...)
+\end{lstlisting}
+
+Alternatively, users can load modules in the \lstinline^init^ member function when implementing a custom config type.
+
+\begin{lstlisting}
+class my_config : public actor_system_config {
+public:
+  void init() override {
+    load<mod1>();
+    load<mod2>();
+    // ...
+  }
+};
+\end{lstlisting}
+
+The third option is to simply call \lstinline^x.load<mod1>()^ on a config object \emph{before} initializing an actor system with it.
+
+\subsection{Command Line Options and INI Configuration Files}
+\label{system-config-options}
+
+\lib organizes program options in categories and parses CLI arguments and INI files. CLI arguments override values in the INI file which override hard-coded defaults. Users can add any number of custom program options by implementing a subtype of \lstinline^actor_system_config^ and registering new options in \lstinline^init^. The example below adds three options to the ``global'' category.
+
+\lstinputlisting[linerange={254-266}]{../examples/remoting/distributed_calculator.cpp}
+
+The line \lstinline^opt_group{custom_options_, "global"}^ adds the ``global'' group to the list of custom options. The following calls to \lstinline^add^ then add individual options. The first argument to \lstinline^add^ is the associated variable. The second argument is the option name, optionally suffixed with a \lstinline^,^ and a single-character short name. The short name is only considered for CLI parsing and allows users to abbreviate commonly used option names. The third and final argument to \lstinline^add^ is a help text.
+
+The custom \lstinline^config^ class allows end users to set the port for the application to 42 with either \lstinline^--port=42^ (long name) or \lstinline^-p 42^ (short name). The long option name is prefixed by the category when using a different category than ``global''. For example, adding the port option to the category ``foo'' means end users have to type \lstinline^--foo.port=42^ when using the long name. Short names are unaffected by the category, but have to be unique.
+
+Boolean options do not require arguments. The member variable \lstinline^server_mode^ is set to \lstinline^true^ if the command line contains either \lstinline^--server-mode^ or \lstinline^-s^.
+
+\lib prefixes all of its default CLI options with \lstinline^caf#^, except for ``help'' (\lstinline^--help^, \lstinline^-h^, or \lstinline^-?^). The default name for the INI file is \lstinline^caf-application.ini^. Users can change the file name and path by passing \lstinline^--caf#config-file=<path>^ on the command line.
+
+INI files are organized in categories. No value is allowed outside of a category (no implicit ``global'' category). CAF reads \lstinline^true^ and \lstinline^false^ as boolean, numbers as (signed) integers or \lstinline^double^, \lstinline^"^-enclosed characters as strings, and \lstinline^'^-enclosed characters as atoms~\see{atom}. The following example INI file lists all standard options in \lib and their default value. Note that some options such as \lstinline^scheduler.max-threads^ are usually detected at runtime and thus have no hard-coded default.
+
+\lstinputlisting[language=ini]{../examples/caf-application.ini}
+
+\subsection{Adding Custom Message Types}
+
+\subsection{Adding Custom Error Types}
+
+Adding a custom error type to the system is a convenience feature to allow improve the string representation. Error types can be added by implementing a render function and passing it to \lstinline{add_error_category}, as shown in~\sref{custom-error}.
+
+\subsection{Adding Custom Actor Types \experimental}

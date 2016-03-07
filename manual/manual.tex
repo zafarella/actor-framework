@@ -14,8 +14,11 @@
 \usepackage{xspace}
 \usepackage{tabularx}
 \usepackage{hyperref}
-\usepackage{fancyhdr}
+%\usepackage{fancyhdr}
 \usepackage{multicol}
+\usepackage{capt-of}
+\usepackage{graphicx}
+\usepackage{float}
 
 % HTML compilation
 \usepackage{hevea}
@@ -34,6 +37,10 @@
 \tolerance=500
 \hbadness=752
 
+\definecolor{lightgrey}{rgb}{0.9,0.9,0.9}
+\definecolor{lightblue}{rgb}{0,0,1}
+
+\definecolor{grey}{rgb}{0.5,0.5,0.5}
 \definecolor{blue}{rgb}{0,0,1}
 \definecolor{violet}{rgb}{0.5,0,0.5}
 
@@ -41,7 +48,21 @@
 \definecolor{darkblue}{rgb}{0,0,0.5}
 \definecolor{darkgreen}{rgb}{0,0.5,0}
 
+
+\newcommand{\sref}[1]{\S\,\ref{#1}}
+\newcommand{\see}[1]{(see~\sref{#1})}
 \pagenumbering{arabic}
+
+\newcommand{\singlefig}[3]{%
+ \begin{figure}[H]%
+  \centering%
+  \includegraphics[width=.6\columnwidth]{#1}%
+  \captionof{figure}{#2}%
+  \label{#3}%
+ \end{figure}%
+}
+
+\newcommand{\experimental}{{\color{darkred}$^{experimental}$}}
 
 \input{variables}
 
@@ -56,14 +77,17 @@
 \date{\today}
 
 % page setup
-\setlength{\voffset}{-0.5in}
-\setlength{\hoffset}{-0.5in}
-\addtolength{\textwidth}{1in}
-\addtolength{\textheight}{1.5in}
+\setlength{\voffset}{-1in}
+\setlength{\hoffset}{-0.75in}
+\addtolength{\textwidth}{1.5in}
+\addtolength{\textheight}{2in}
 \setlength{\headheight}{15pt}
 
+% include paragraphs in TOC
+\setcounter{tocdepth}{5}
+
 % some HEVEA / HTML style sheets
-\newstyle{body}{width:600px;margin:auto;padding-top:20px;text-align: justify;}
+\newstyle{body}{width:800px;margin:auto;padding-top:20px;text-align: justify;}
 
 % more compact itemize
 \newenvironment{itemize*}%
@@ -73,69 +97,83 @@
   {\end{itemize}}
 
 \begin{document}
-
-% fancy header setup
-%BEGIN LATEX
-\fancypagestyle{plain}{%
-\fancyhf{} % clear all header and footer fields
-\renewcommand{\headrulewidth}{0pt}
-\renewcommand{\footrulewidth}{0pt}
-}
-%END LATEX
-
-\maketitle
-\clearpage
+\maketitle\thispagestyle{empty}
 \pagestyle{empty}
+\clearpage
 \tableofcontents
 \clearpage
-
-% fancy header setup for page 1
-%BEGIN LATEX
 \setcounter{page}{1}
-\pagenumbering{arabic}
-\pagestyle{fancy}
-\fancyhead[L,R]{}
-\fancyhead[C]{\leftmark}
-\renewcommand{\sectionmark}[1]{%
-\markboth{\MakeUppercase{#1}}{}%
+\pagestyle{plain}
+
+% new highlight for INI file syntax
+\lstdefinelanguage{ini}{%
+  basicstyle=\ttfamily\footnotesize,%
+%  columns=fullflexible,%
+  morecomment=[s][\color{blue}]{[}{]},%
+  morecomment=[l]{;},%
+  morecomment=[s]{<}{>},%
+  morestring=[b]",%
+  morestring=[b]',%
+  commentstyle=\color{violet},%
+  morekeywords={},%
+  otherkeywords={=,false,true},%
+  keywordstyle=\color{blue},%
+  stringstyle=\color{darkgreen},%
 }
-%END LATEX
 
 % code listings setup
 \lstset{%
   language=C++,%
   morekeywords={constexpr,nullptr,size_t,uint32_t,assert,override,final},%
-  basicstyle=\ttfamily\small,%
+  basicstyle=\ttfamily\footnotesize,%
   sensitive=true,%
   keywordstyle=\color{blue},%
   stringstyle=\color{darkgreen},%
   commentstyle=\color{violet},%
   showstringspaces=false,%
-  tabsize=4,%
-  numberstyle=\footnotesize%
+  tabsize=2,%
+  frame=leftline,
+  rulecolor=\color{lightblue},
+  xleftmargin=20pt,
 }
 
+%BEGIN LATEX
+\lstset{
+  numberstyle=\tiny,
+  numbers=left,
+  numbersep=10pt,
+  xleftmargin=20pt,
+  %framesep=4.5mm,
+  %framexleftmargin=2.5mm,
+  framexleftmargin=5pt,
+  framesep=15pt,
+  fillcolor=\color{lightgrey},
+}
+%END LATEX
+
 % content
+\part{Core Library}
 \include{Introduction}
 \include{FirstSteps}
-\include{PatternMatching}
+\include{MessageHandlers}
 \include{Actors}
-\include{SendingMessages}
-\include{ReceivingMessages}
-\include{SynchronousMessages}
-\include{ActorManagement}
-\include{SpawningActors}
-\include{MessagePriorities}
+\include{MessagePassing}
+\include{Scheduler}
+\include{Registry}
+\include{ReferenceCounting}
+\include{Error}
+\include{ConfiguringActorSystems}
+\include{Messages}
+\include{CommonPitfalls}
+\part{I/O Library}
 \include{NetworkTransparency}
 \include{NetworkIO}
 \include{GroupCommunication}
 \include{ManagingGroupsOfWorkers}
 \include{ActorCompanions}
-\include{TypeSystem}
+\include{Serialization}
 \include{BlockingAPI}
-\include{StronglyTypedActors}
-\include{Messages}
-\include{CommonPitfalls}
+\include{FAQ}
 \include{Appendix}
 
 \end{document}

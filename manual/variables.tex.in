@@ -1,9 +1,9 @@
 \newcommand{\lib}{CAF\xspace}
 
 \newcommand{\libtitle}{%
-\texttt{\huge{\textbf{\lib}}}\\~\\A C++ framework for actor programming\\~\\~\\~\\%
+\texttt{\huge{\textbf{\lib}}}\\~\\The C++ Actor Framework\\~\\~\\~\\%
 }
 
 \newcommand{\libsubtitle}{%
-User Manual\\\normalsize{\lib version @CAF_VERSION@}\vfill%
+User Manual\\\normalsize{version @CAF_VERSION@}\vfill%
 }
