@@ -478,8 +478,6 @@ public:
         >::type...>;
     static_assert(actor_accepts_message(signatures_of<Handle>(), token{}),
                   "receiver does not accept given message");
-    if (! dest)
-      return {};
     auto mid = current_element_->mid;
     current_element_->mid = P == message_priority::high
                             ? mid.with_high_priority()

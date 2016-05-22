@@ -41,7 +41,7 @@ actor::actor(const scoped_actor& x) : ptr_(actor_cast<strong_actor_ptr>(x)) {
   // nop
 }
 
-actor::actor(const invalid_actor_t&) : ptr_(nullptr) {
+actor::actor(const unsafe_actor_handle_init_t&) : ptr_(nullptr) {
   // nop
 }
 
@@ -55,11 +55,6 @@ actor::actor(actor_control_block* ptr, bool add_ref) : ptr_(ptr, add_ref) {
 
 actor& actor::operator=(const scoped_actor& x) {
   ptr_ = actor_cast<strong_actor_ptr>(x);
-  return *this;
-}
-
-actor& actor::operator=(const invalid_actor_t&) {
-  ptr_.reset();
   return *this;
 }
 
@@ -80,24 +75,20 @@ actor_addr actor::address() const noexcept {
 }
 
 node_id actor::node() const noexcept {
-  return ptr_ ? ptr_->node() : invalid_node_id;
+  return ptr_->node();
 }
 
 actor_id actor::id() const noexcept {
-  return ptr_ ? ptr_->id() : invalid_actor_id;
+  return ptr_->id();
 }
 
 actor actor::bind_impl(message msg) const {
-  if (! ptr_)
-    return invalid_actor;
   auto& sys = *(ptr_->home_system);
   return make_actor<decorator::adapter, actor>(sys.next_actor_id(), sys.node(),
                                                &sys, ptr_, std::move(msg));
 }
 
 actor operator*(actor f, actor g) {
-  if (! f || ! g)
-    return invalid_actor;
   auto& sys = f->home_system();
   return make_actor<decorator::sequencer, actor>(
     sys.next_actor_id(), sys.node(), &sys,
@@ -106,18 +97,14 @@ actor operator*(actor f, actor g) {
 }
 
 actor actor::splice_impl(std::initializer_list<actor> xs) {
-  if (xs.size() < 2)
-    return invalid_actor;
+  CAF_ASSERT(xs.size() >= 2);
   actor_system* sys = nullptr;
   std::vector<strong_actor_ptr> tmp;
-  for (auto& x : xs)
-    if (x) {
-      if (! sys)
-        sys = &(x->home_system());
-      tmp.push_back(actor_cast<strong_actor_ptr>(x));
-    } else {
-      return invalid_actor;
-    }
+  for (auto& x : xs) {
+    if (! sys)
+      sys = &(x->home_system());
+    tmp.push_back(actor_cast<strong_actor_ptr>(x));
+  }
   return make_actor<decorator::splitter, actor>(sys->next_actor_id(),
                                                 sys->node(), sys,
                                                 std::move(tmp),

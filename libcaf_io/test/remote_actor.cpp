@@ -130,8 +130,6 @@ CAF_TEST(identity_semantics) {
   // client side
   auto server1 = client_side_mm.remote_actor(local_host, port1);
   auto server2 = client_side_mm.remote_actor(local_host, port2);
-  CAF_REQUIRE(server1);
-  CAF_REQUIRE(server2);
   CAF_CHECK_EQUAL(server1, client_side_mm.remote_actor(local_host, port1));
   CAF_CHECK_EQUAL(server2, client_side_mm.remote_actor(local_host, port2));
   // cleanup
@@ -144,7 +142,6 @@ CAF_TEST(ping_pong) {
                                      0, local_host);
   // client side
   auto pong = client_side_mm.remote_actor(local_host, port);
-  CAF_REQUIRE(pong);
   client_side.spawn(make_ping_behavior, pong);
 }
 
@@ -154,7 +151,6 @@ CAF_TEST(custom_message_type) {
                                      0, local_host);
   // client side
   auto sorter = client_side_mm.remote_actor(local_host, port);
-  CAF_REQUIRE(sorter);
   client_side.spawn(make_sort_requester_behavior, sorter);
 }
 

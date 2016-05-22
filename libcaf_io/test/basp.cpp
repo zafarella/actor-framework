@@ -334,9 +334,9 @@ public:
     auto src = actor_cast<strong_actor_ptr>(registry_->get(hdr.source_actor));
     auto dest = actor_cast<actor>(registry_->get(hdr.dest_actor));
     CAF_REQUIRE(dest);
-    dest->enqueue(mailbox_element::make(src, message_id::make(),
-                                        std::move(stages), std::move(msg)),
-                  nullptr);
+    (*dest)->enqueue(mailbox_element::make(src, message_id::make(),
+                                           std::move(stages), std::move(msg)),
+                     nullptr);
   }
 
   class mock_t {
@@ -566,7 +566,7 @@ CAF_TEST(remote_actor_and_send) {
   mpx()->provide_scribe(lo, 4242, remote_hdl(0));
   CAF_REQUIRE(mpx()->pending_scribes().count(make_pair(lo, 4242)) == 1);
   auto mm1 = system.middleman().actor_handle();
-  actor result;
+  actor result{unsafe_actor_handle_init};
   auto f = self()->request(mm1, infinite,
                            connect_atom::value, lo, uint16_t{4242});
   // wait until BASP broker has received and processed the connect message
@@ -611,7 +611,7 @@ CAF_TEST(remote_actor_and_send) {
       auto proxy = proxies().get(remote_node(0), pseudo_remote(0)->id());
       CAF_REQUIRE(proxy != nullptr);
       CAF_REQUIRE(proxy == res);
-      result = actor_cast<actor>(res);
+      result = *actor_cast<actor>(res);
     }
   );
   CAF_MESSAGE("send message to proxy");

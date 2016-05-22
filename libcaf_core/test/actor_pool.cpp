@@ -88,16 +88,13 @@ CAF_TEST(round_robin_actor_pool) {
       [&](int res) {
         CAF_CHECK_EQUAL(res, i + i);
         auto sender = self->current_sender();
-        workers.push_back(actor_cast<actor>(sender));
+        CAF_REQUIRE(sender);
+        workers.push_back(*actor_cast<actor>(sender));
       }
     );
   }
   CAF_CHECK_EQUAL(workers.size(), 6u);
   CAF_CHECK(std::unique(workers.begin(), workers.end()) == workers.end());
-  auto is_invalid = [](const actor& x) {
-    return x == invalid_actor;
-  };
-  CAF_CHECK(std::none_of(workers.begin(), workers.end(), is_invalid));
   self->request(pool, infinite, sys_atom::value, get_atom::value).receive(
     [&](std::vector<actor>& ws) {
       std::sort(workers.begin(), workers.end());

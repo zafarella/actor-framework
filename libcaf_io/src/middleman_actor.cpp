@@ -61,7 +61,7 @@ public:
 
   void on_exit() override {
     CAF_LOG_TRACE("");
-    broker_ = invalid_actor;
+    broker_ = unsafe_actor_handle_init;
   }
 
   const char* name() const override {

@@ -988,8 +988,8 @@ void local_actor::send_exit(const actor_addr& whom, error reason) {
   auto ptr = actor_cast<actor>(whom);
   if (! ptr)
     return;
-  ptr->eq_impl(message_id::make(), nullptr, context(),
-               exit_msg{address(), std::move(reason)});
+  (*ptr)->eq_impl(message_id::make(), nullptr, context(),
+                  exit_msg{address(), std::move(reason)});
 }
 
 const char* local_actor::name() const {

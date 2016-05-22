@@ -60,6 +60,9 @@ public:
   // tell actor_cast which semantic this type uses
   static constexpr bool has_weak_ptr_semantics = true;
 
+  // tell actor_cast this is a nullable handle type
+  static constexpr bool has_non_null_guarantee = false;
+
   actor_addr() = default;
   actor_addr(actor_addr&&) = default;
   actor_addr(const actor_addr&) = default;

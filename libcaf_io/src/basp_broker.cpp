@@ -262,8 +262,11 @@ void basp_broker_state::deliver(const node_id& src_nid,
 
 void basp_broker_state::learned_new_node(const node_id& nid) {
   CAF_LOG_TRACE(CAF_ARG(nid));
-  auto& tmp = spawn_servers[nid];
-  tmp = system().spawn<hidden>([=](event_based_actor* this_actor) -> behavior {
+  if (spawn_servers.count(nid) > 0) {
+    CAF_LOG_ERROR("learned_new_node called for known node " << CAF_ARG(nid));
+    return;
+  }
+  auto tmp = system().spawn<hidden>([=](event_based_actor* this_actor) -> behavior {
     CAF_LOG_TRACE("");
     // terminate when receiving a down message
     this_actor->set_down_handler([=](down_msg& dm) {
@@ -278,7 +281,10 @@ void basp_broker_state::learned_new_node(const node_id& nid) {
         CAF_LOG_TRACE(CAF_ARG(config_serv_addr));
         // drop unexpected messages from this point on
         this_actor->set_default_handler(print_and_drop);
-        auto config_serv = actor_cast<actor>(config_serv_addr);
+        auto config_serv_opt = actor_cast<actor>(config_serv_addr);
+        if (! config_serv_opt)
+          return;
+        auto config_serv = *config_serv_opt;
         this_actor->monitor(config_serv);
         this_actor->become(
           [=](spawn_atom, std::string& type, message& args)
@@ -296,6 +302,7 @@ void basp_broker_state::learned_new_node(const node_id& nid) {
       }
     };
   });
+  spawn_servers.emplace(nid, tmp);
   using namespace detail;
   system().registry().put(tmp.id(), actor_cast<strong_actor_ptr>(tmp));
   auto writer = make_callback([](serializer& sink) {
@@ -449,7 +456,7 @@ behavior basp_broker::make_behavior() {
     auto port = add_tcp_doorman(uint16_t{0});
     auto addrs = network::interfaces::list_addresses(false);
     auto config_server = system().registry().get(atom("ConfigServ"));
-    send(actor_cast<actor>(config_server), put_atom::value,
+    send(*actor_cast<actor>(config_server), put_atom::value,
          "basp.default-connectivity",
          make_message(port.second, std::move(addrs)));
     state.enable_automatic_connections = true;

@@ -57,6 +57,11 @@ behavior client(event_based_actor* self, actor serv) {
 struct server_state {
   actor client; // the spawn we connect to the server in our main
   actor aut; // our mirror
+  server_state()
+      : client(unsafe_actor_handle_init),
+        aut(unsafe_actor_handle_init) {
+    // nop
+  }
 };
 
 behavior server(stateful_actor<server_state>* self) {
@@ -67,7 +72,9 @@ behavior server(stateful_actor<server_state>* self) {
       auto s = self->current_sender();
       CAF_REQUIRE(s != invalid_actor_addr);
       CAF_REQUIRE(self->node() != s.node());
-      self->state.client = actor_cast<actor>(s);
+      auto opt = actor_cast<actor>(s);
+      CAF_REQUIRE(opt);
+      self->state.client = *opt;
       auto mm = self->system().middleman().actor_handle();
       self->request(mm, infinite, spawn_atom::value,
                     s.node(), "mirror", make_message()).then(
@@ -76,7 +83,7 @@ behavior server(stateful_actor<server_state>* self) {
           CAF_LOG_TRACE(CAF_ARG(ptr) << CAF_ARG(ifs));
           CAF_REQUIRE(ptr);
           CAF_CHECK(ifs.empty());
-          self->state.aut = actor_cast<actor>(ptr);
+          self->state.aut = *actor_cast<actor>(ptr);
           self->send(self->state.aut, "hello mirror");
           self->become(
             [=](const std::string& str) {
@@ -104,7 +111,6 @@ void run_client(int argc, char** argv, uint16_t port) {
      .add_actor_type("mirror", mirror);
   actor_system system{cfg};
   auto serv = system.middleman().remote_actor("localhost", port);
-  CAF_REQUIRE(serv);
   system.spawn(client, serv);
 }
 

@@ -48,7 +48,7 @@ behavior fan_out_fan_in(stateful_actor<splitter_state>* self,
     // request().await() has LIFO ordering
     for (auto i = workers.rbegin(); i != workers.rend(); ++i)
       // TODO: maybe infer some useful timeout or use config parameter?
-      self->request(actor_cast<actor>(*i), infinite, msg).await(
+      self->request(*actor_cast<actor>(*i), infinite, msg).await(
         [=]() {
           // nop
         },

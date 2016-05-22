@@ -32,21 +32,12 @@
 #include "caf/actor_marker.hpp"
 #include "caf/abstract_actor.hpp"
 #include "caf/actor_control_block.hpp"
+#include "caf/unsafe_actor_handle_init.hpp"
 
 #include "caf/detail/comparable.hpp"
 #include "caf/detail/type_traits.hpp"
 
 namespace caf {
-
-struct invalid_actor_t {
-  constexpr invalid_actor_t() {
-    // nop
-  }
-};
-
-/// Identifies an invalid {@link actor}.
-/// @relates actor
-constexpr invalid_actor_t invalid_actor = invalid_actor_t{};
 
 template <class T>
 struct is_convertible_to_actor {
@@ -64,12 +55,16 @@ struct is_convertible_to_actor<scoped_actor> : std::true_type {
 /// Identifies an untyped actor. Can be used with derived types
 /// of `event_based_actor`, `blocking_actor`, and `actor_proxy`.
 class actor : detail::comparable<actor>,
-              detail::comparable<actor, actor_addr>,
-              detail::comparable<actor, invalid_actor_t>,
-              detail::comparable<actor, invalid_actor_addr_t> {
+              detail::comparable<actor, actor_addr> {
 public:
-  // grant access to private ctor
+  // -- friend types that need access to private ctors
   friend class local_actor;
+
+  template <class>
+  friend class data_processor;
+
+  template <class>
+  friend class type_erased_value_impl;
 
   using signatures = none_t;
 
@@ -80,21 +75,23 @@ public:
   // tell actor_cast which semantic this type uses
   static constexpr bool has_weak_ptr_semantics = false;
 
-  actor() = default;
+  // tell actor_cast this is a non-null handle type
+  static constexpr bool has_non_null_guarantee = true;
+
   actor(actor&&) = default;
   actor(const actor&) = default;
   actor& operator=(actor&&) = default;
   actor& operator=(const actor&) = default;
 
   actor(const scoped_actor&);
-  actor(const invalid_actor_t&);
+  actor(const unsafe_actor_handle_init_t&);
 
   template <class T,
             class = typename std::enable_if<
                       std::is_base_of<dynamically_typed_actor_base, T>::value
                     >::type>
   actor(T* ptr) : ptr_(ptr->ctrl()) {
-    // nop
+    CAF_ASSERT(ptr != nullptr);
   }
 
   template <class T>
@@ -114,20 +111,9 @@ public:
   }
 
   actor& operator=(const scoped_actor& x);
-  actor& operator=(const invalid_actor_t&);
 
   /// Returns the address of the stored actor.
   actor_addr address() const noexcept;
-
-  /// Returns `*this != invalid_actor`.
-  inline operator bool() const noexcept {
-    return static_cast<bool>(ptr_);
-  }
-
-  /// Returns `*this == invalid_actor`.
-  inline bool operator!() const noexcept {
-    return ! ptr_;
-  }
 
   /// Returns the origin node of this actor.
   node_id node() const noexcept;
@@ -144,6 +130,12 @@ public:
     return bind_impl(make_message(std::forward<Ts>(xs)...));
   }
 
+  /// Queries whether this object was constructed using
+  /// `unsafe_actor_handle_init` or is in moved-from state.
+  bool unsafe() const {
+    return ! ptr_;
+  }
+
   /// @cond PRIVATE
 
   inline abstract_actor* operator->() const noexcept {
@@ -154,14 +146,6 @@ public:
   intptr_t compare(const actor&) const noexcept;
 
   intptr_t compare(const actor_addr&) const noexcept;
-
-  inline intptr_t compare(const invalid_actor_t&) const noexcept {
-    return ptr_ ? 1 : 0;
-  }
-
-  inline intptr_t compare(const invalid_actor_addr_t&) const noexcept {
-    return compare(invalid_actor);
-  }
 
   static actor splice_impl(std::initializer_list<actor> xs);
 
@@ -179,6 +163,8 @@ public:
   /// @endcond
 
 private:
+  actor() = default;
+
   actor bind_impl(message msg) const;
 
   inline actor_control_block* get() const noexcept {
@@ -222,9 +208,8 @@ namespace std {
 template <>
 struct hash<caf::actor> {
   inline size_t operator()(const caf::actor& ref) const {
-    return ref ? static_cast<size_t>(ref->id()) : 0;
+    return static_cast<size_t>(ref->id());
   }
-
 };
 } // namespace std
 
