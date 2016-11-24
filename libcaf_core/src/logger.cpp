@@ -58,29 +58,54 @@ constexpr const char* log_level_name[] = {
 };
 
 #ifdef CAF_LOG_LEVEL
+
 static_assert(CAF_LOG_LEVEL >= 0 && CAF_LOG_LEVEL <= 4,
               "assertion: 0 <= CAF_LOG_LEVEL <= 4");
 
 #ifdef CAF_MSVC
-thread_local
-#else
-__thread
-#endif
-actor_system* current_logger_system_ptr = nullptr;
 
-inline actor_system* current_logger_system() {
-  return current_logger_system_ptr;
-}
+thread_local intrusive_ptr<logger> current_logger;
 
-inline void current_logger_system(actor_system* x) {
-  current_logger_system_ptr = x;
+inline void set_current_logger(logger* x) {
+  current_logger.reset(x);
 }
 
 inline logger* get_current_logger() {
-  auto sys = current_logger_system();
-  return sys ? &sys->logger() : nullptr;
+  return current_logger.get();
 }
-#else
+
+#else // CAF_MSVC
+
+pthread_key_t s_key;
+pthread_once_t s_key_once = PTHREAD_ONCE_INIT;
+
+void logger_ptr_destructor(void* ptr) {
+  if (ptr) {
+    intrusive_ptr_release(reinterpret_cast<logger*>(ptr));
+  }
+}
+
+void make_logger_ptr() {
+  pthread_key_create(&s_key, logger_ptr_destructor);
+}
+
+void set_current_logger(logger* x) {
+  pthread_once(&s_key_once, make_logger_ptr);
+  logger_ptr_destructor(pthread_getspecific(s_key));
+  if (x)
+    intrusive_ptr_add_ref(x);
+  pthread_setspecific(s_key, x);
+}
+
+logger* get_current_logger() {
+  pthread_once(&s_key_once, make_logger_ptr);
+  return reinterpret_cast<logger*>(pthread_getspecific(s_key));
+}
+
+#endif // CAF_MSVC
+
+#else // CAF_LOG_LEVEL
+
 inline void current_logger_system(actor_system*) {
   // nop
 }
@@ -88,7 +113,7 @@ inline void current_logger_system(actor_system*) {
 inline logger* get_current_logger() {
   return nullptr;
 }
-#endif
+#endif // CAF_LOG_LEVEL
 
 void prettify_type_name(std::string& class_name) {
   //replace_all(class_name, " ", "");
@@ -252,7 +277,10 @@ void logger::log(int level, const char* component,
 }
 
 void logger::set_current_actor_system(actor_system* x) {
-  current_logger_system(x);
+  if (x)
+    set_current_logger(&x->logger());
+  else
+    set_current_logger(nullptr);
 }
 
 logger* logger::current_logger() {
@@ -270,7 +298,11 @@ void logger::log_static(int level, const char* component,
 }
 
 logger::~logger() {
-  // nop
+  stop();
+  // tell system our dtor is done
+  std::unique_lock<std::mutex> guard{system_.logger_dtor_mtx_};
+  system_.logger_dtor_done_ = true;
+  system_.logger_dtor_cv_.notify_one();
 }
 
 logger::logger(actor_system& sys) : system_(sys) {
@@ -300,15 +332,17 @@ void logger::run() {
   }
   std::fstream file(f, std::ios::out | std::ios::app);
   std::unique_ptr<event> ptr;
-  for (;;) {
+  bool done = false;
+  while (!done) {
     // make sure we have data to read
     queue_.synchronized_await(queue_mtx_, queue_cv_);
     // read & process event
     ptr.reset(queue_.try_pop());
     CAF_ASSERT(ptr != nullptr);
+    // empty message means: shut down
     if (ptr->msg.empty()) {
-      file.close();
-      return;
+      done = true;
+      ptr->msg = "EOF";
     }
     file << ptr->prefix << ' ' << ptr->msg << std::endl;
     // TODO: once we've phased out GCC 4.8, we can upgarde this to a regex.
@@ -340,6 +374,7 @@ void logger::run() {
       std::clog << ptr->msg << color(reset) << std::endl;
     }
   }
+  file.close();
 }
 
 void logger::start() {
@@ -373,11 +408,11 @@ void logger::start() {
     }
   }
   thread_ = std::thread{[this] { this->run(); }};
-  std::string msg = "ENTRY level = ";
+  std::string msg = "level = ";
   msg += to_string(lvl_atom);
   msg += ", node = ";
   msg += to_string(system_.node());
-  log(CAF_LOG_LEVEL_INFO, "caf", "caf::logger", "run", __FILE__, __LINE__, msg);
+  log(CAF_LOG_LEVEL_INFO, "caf", "caf.logger", "start", __FILE__, __LINE__, msg);
 #endif
 }
 
@@ -385,8 +420,7 @@ void logger::stop() {
 #if defined(CAF_LOG_LEVEL)
   if (!thread_.joinable())
     return;
-  log(CAF_LOG_LEVEL_INFO, "caf", "caf::logger", "run", __FILE__, __LINE__,
-      "EXIT");
+  log(CAF_LOG_LEVEL_INFO, "caf", "caf.logger", "stop", __FILE__, __LINE__, "");
   // an empty string means: shut down
   queue_.synchronized_enqueue(queue_mtx_, queue_cv_, new event);
   thread_.join();
