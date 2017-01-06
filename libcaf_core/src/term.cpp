@@ -39,16 +39,14 @@ namespace {
 
 // windows terminals do no support bold fonts
 
-enum win_color {
-  win_black = 0,
-  win_red = FOREGROUND_RED,
-  win_green = FOREGROUND_GREEN,
-  win_yellow = FOREGROUND_RED | FOREGROUND_GREEN ,
-  win_blue = FOREGROUND_BLUE,
-  win_magenta = FOREGROUND_RED | FOREGROUND_BLUE,
-  win_cyan = FOREGROUND_GREEN | FOREGROUND_BLUE,
-  win_white = FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE
-};
+constexpr int win_black = 0;
+constexpr int win_red = FOREGROUND_INTENSITY | FOREGROUND_RED;
+constexpr int win_green = FOREGROUND_INTENSITY | FOREGROUND_GREEN;
+constexpr int win_blue = FOREGROUND_INTENSITY | FOREGROUND_BLUE;
+constexpr int win_yellow = win_red | win_green;
+constexpr int win_magenta = win_red | win_blue;
+constexpr int win_cyan = win_green | win_blue;
+constexpr int win_white = win_red | win_cyan;
 
 int tty_codes[] = {
   -1,          // reset
@@ -71,7 +69,7 @@ int tty_codes[] = {
   win_white    // bold white
 };
 
-void set_term_color(std::ostream& out, int color_code) {
+void set_term_color(std::ostream& out, int c) {
   static WORD default_color = 0xFFFF;
   auto hdl = GetStdHandle(&out == &std::cout ? STD_OUTPUT_HANDLE
                                              : STD_ERROR_HANDLE);
@@ -81,9 +79,11 @@ void set_term_color(std::ostream& out, int color_code) {
       return;
     default_color = info.wAttributes;
   }
-  SetConsoleTextAttribute(color_code < 0 ? default_color
-                                         : static_cast<WORD>(color_code));
-  if (color_code == -2)
+  // always pick background from the default color
+  auto x = c < 0 ? default_color
+                 : static_cast<WORD>((0xF0 & default_color) | (0x0F & c));
+  SetConsoleTextAttribute(hdl, x);
+  if (c == -2)
     out << '\n';
 }
 
