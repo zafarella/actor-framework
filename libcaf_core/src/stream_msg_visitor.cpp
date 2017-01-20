@@ -60,19 +60,24 @@ auto stream_msg_visitor::operator()(stream_msg::open& x) -> result_type {
   if (!res) {
     CAF_LOG_WARNING("stream handshake failed: actor did not respond to token:"
                     << CAF_ARG(x.token));
+printf("%s %d\n", __FILE__, __LINE__);
     return fail(sec::stream_init_failed);
   }
+printf("%s %d\n", __FILE__, __LINE__);
   i_ = self_->streams().find(sid_);
   if (i_ == e_) {
     CAF_LOG_WARNING("stream handshake failed: actor did not provide a stream "
                     "handler after receiving token:"
                     << CAF_ARG(x.token));
+printf("%s %d\n", __FILE__, __LINE__);
     return fail(sec::stream_init_failed);
   }
+printf("%s %d\n", __FILE__, __LINE__);
   auto& handler = i_->second;
   // store upstream actor
   auto initial_credit = handler->add_upstream(x.prev_stage, sid_, x.priority);
   if (initial_credit) {
+printf("%s %d\n", __FILE__, __LINE__);
     // check whether we are a stage in a longer pipeline and send more
     // stream_open messages if required
     auto ic = static_cast<int32_t>(*initial_credit);
