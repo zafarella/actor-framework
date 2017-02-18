@@ -164,10 +164,22 @@ public:
     tid_ = std::move(tid);
   }
 
+  inline void add_cycle_listener(abstract_broker* ptr) {
+    cycle_listeners_.emplace_back(ptr);
+  }
+
+  void remove_cycle_listener(abstract_broker* ptr);
+
 protected:
   /// Identifies the thread this multiplexer
   /// is running in. Must be set by the subclass.
   std::thread::id tid_;
+
+  /// Lists all brokers that want to receive an `io_cycle_atom` whenever
+  /// an iteration of the I/O loop has finished.
+  /// @warning Loop listeners *must* make sure to unsubscribe while cleaning
+  ///          up to avoid dangling pointers.
+  std::vector<abstract_broker*> cycle_listeners_;
 };
 
 using multiplexer_ptr = std::unique_ptr<multiplexer>;

@@ -57,6 +57,14 @@ void multiplexer::runnable::intrusive_ptr_release_impl() {
   intrusive_ptr_release(this);
 }
 
+void multiplexer::remove_cycle_listener(abstract_broker* ptr) {
+  // move all elements that are equal to ptr to the end and then shrink vector
+  auto b = cycle_listeners_.begin();
+  auto e = cycle_listeners_.end();
+  auto i = std::partition(b, e, [&](abstract_broker* x) { return x != ptr; });
+  cycle_listeners_.resize(std::distance(b, i));
+}
+
 } // namespace network
 } // namespace io
 } // namespace caf

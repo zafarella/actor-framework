@@ -317,6 +317,11 @@ expected<uint16_t> remote_port_of_fd(native_socket fd);
 
   void default_multiplexer::run() {
     CAF_LOG_TRACE("epoll()-based multiplexer");
+    // signalizes EndOfCycle to all subscribed brokers
+    mailbox_element_vals<atom_value> eoc{
+      strong_actor_ptr{}, message_id::make(),
+      mailbox_element::forwarding_stack{}, io_cycle_atom::value};
+    // run until shutdown by user
     while (shadow_ > 0) {
       int presult = epoll_wait(epollfd_, pollset_.data(),
                                static_cast<int>(pollset_.size()), -1);
@@ -338,11 +343,16 @@ expected<uint16_t> remote_port_of_fd(native_socket fd);
       }
       auto iter = pollset_.begin();
       auto last = iter + presult;
+      // call all event handlers on the active file descriptors
       for (; iter != last; ++iter) {
         auto ptr = reinterpret_cast<event_handler*>(iter->data.ptr);
         auto fd = ptr ? ptr->fd() : pipe_.first;
         handle_socket_event(fd, static_cast<int>(iter->events), ptr);
       }
+      // signalize end of this cycle (all event handler were called)
+      for (auto& listener : cycle_listeners_)
+        listener->activate(this, eoc);
+      // run "epoll-internal" events, e.g., for adding/removing sockets
       for (auto& me : events_) {
         handle(me);
       }
@@ -449,6 +459,10 @@ expected<uint16_t> remote_port_of_fd(native_socket fd);
   void default_multiplexer::run() {
     CAF_LOG_TRACE("poll()-based multiplexer; " << CAF_ARG(input_mask)
                   << CAF_ARG(output_mask) << CAF_ARG(error_mask));
+    // signalizes EndOfCycle to all subscribed brokers
+    mailbox_element_vals<atom_value> eoc{
+      strong_actor_ptr{}, message_id::make(),
+      mailbox_element::forwarding_stack{}, io_cycle_atom::value};
     // we store the results of poll() in a separate vector , because
     // altering the pollset while traversing it is not exactly a
     // bright idea ...
@@ -502,6 +516,7 @@ expected<uint16_t> remote_port_of_fd(native_socket fd);
           --presult; // stop as early as possible
         }
       }
+      // call all event handlers on the active file descriptors
       CAF_LOG_DEBUG(CAF_ARG(poll_res.size()));
       for (auto& e : poll_res) {
         // we try to read/write as much as possible by ignoring
@@ -509,6 +524,10 @@ expected<uint16_t> remote_port_of_fd(native_socket fd);
         // operations possible on the socket
         handle_socket_event(e.fd, e.mask, e.ptr);
       }
+      // signalize end of this cycle (all event handler were called)
+      for (auto listener : cycle_listeners_)
+        listener->activate(this, eoc);
+      // run "poll-internal" events, e.g., for adding/removing sockets
       CAF_LOG_DEBUG(CAF_ARG(events_.size()));
       poll_res.clear();
       for (auto& me : events_) {

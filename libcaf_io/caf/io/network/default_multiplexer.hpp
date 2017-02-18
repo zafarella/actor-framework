@@ -67,7 +67,7 @@
 # include <sys/socket.h>
 #endif
 
-// poll xs epoll backend
+// poll vs epoll backend
 #if !defined(CAF_LINUX) || defined(CAF_POLL_IMPL) // poll() multiplexer
 # define CAF_POLL_MULTIPLEXER
 # ifndef CAF_WINDOWS
