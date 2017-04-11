@@ -17,34 +17,59 @@
  * http://www.boost.org/LICENSE_1_0.txt.                                      *
  ******************************************************************************/
 
-#ifndef CAF_POLICY_GREEDY_HPP
-#define CAF_POLICY_GREEDY_HPP
+#include "caf/config.hpp"
 
-#include "caf/upstream_policy.hpp"
+#define CAF_SUITE actor_system_config
+#include "caf/test/unit_test.hpp"
 
-namespace caf {
-namespace policy {
+#include <sstream>
+#include <iostream>
 
-/// Sends ACKs as early and often as possible.
-class greedy final : public upstream_policy {
-public:
-  greedy();
+#include "caf/actor_system_config.hpp"
 
-  void assign_credit(assignment_vec& xs, size_t buf_size,
-                     size_t downstream_credit) override;
+using namespace caf;
 
-  size_t low_watermark;
+namespace {
 
-  size_t high_watermark;
+// A simple dummy INI file. Note that CAF never sets the default for the thread
+// pool to less than 2.
+constexpr const char* case1 = R"__(
+[scheduler]
+max-threads=2
+policy='sharing'
+enable-profiling=true
 
-  size_t min_buffer_size;
+; the middleman
+[middleman]
+app-identifier="case1"
+)__";
 
-  inline static std::unique_ptr<upstream_policy> make() {
-    return std::unique_ptr<upstream_policy>(new greedy);
+struct fixture {
+  actor_system_config cfg;
+  int argc;
+  std::string argv0;
+  char* argv[1];
+
+  fixture() : argc(1), argv0("./caf-test") {
+    argv[0] = &argv0[0];
+    // Make 100% sure we have different base values.
+    cfg.scheduler_max_threads = 10u;
+    cfg.scheduler_policy = atom("stealing");
+    cfg.scheduler_enable_profiling = false;
   }
 };
 
-} // namespace policy
-} // namespace caf
+} // namespace <anonymous>
 
-#endif // CAF_POLICY_GREEDY_HPP
+CAF_TEST_FIXTURE_SCOPE(parse_ini_tests, fixture)
+
+CAF_TEST(simple_ini) {
+  std::istringstream in{case1};
+  cfg.parse(argc, argv, in);
+  CAF_CHECK_EQUAL(cfg.scheduler_policy, atom("sharing"));
+  CAF_CHECK_EQUAL(cfg.scheduler_max_threads, 2u);
+  CAF_CHECK_EQUAL(cfg.scheduler_enable_profiling, true);
+  CAF_CHECK_EQUAL(cfg.middleman_app_identifier, "case1");
+}
+
+CAF_TEST_FIXTURE_SCOPE_END()
