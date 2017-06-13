@@ -109,7 +109,9 @@ enum class sec : uint8_t {
   /// Unable to process a stream since due to missing state.
   invalid_stream_state,
   /// A function view was called without assigning an actor first.
-  bad_function_call
+  bad_function_call,
+  /// URI with an unsupported protocol encountered
+  unsupported_protocol
 };
 
 /// @relates sec
