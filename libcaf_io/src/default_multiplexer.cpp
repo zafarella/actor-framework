@@ -864,8 +864,8 @@ scribe_ptr default_multiplexer::new_scribe(native_socket fd) {
   CAF_LOG_TRACE("");
   class impl : public scribe {
   public:
-    impl(default_multiplexer& mx, native_socket sockfd)
-        : scribe(network::conn_hdl_from_socket(sockfd)),
+    impl(default_multiplexer& mx, native_socket sockfd, int64_t id)
+        : scribe(connection_handle::from_int(id)),
           launched_(false),
           stream_(mx, sockfd) {
       // nop
@@ -923,7 +923,7 @@ scribe_ptr default_multiplexer::new_scribe(native_socket fd) {
     bool launched_;
     stream_impl<tcp_policy> stream_;
   };
-  return make_counted<impl>(*this, fd);
+  return make_counted<impl>(*this, fd, next_endpoint_id());
 }
 
 expected<scribe_ptr>
@@ -939,8 +939,8 @@ doorman_ptr default_multiplexer::new_doorman(native_socket fd) {
   CAF_ASSERT(fd != network::invalid_native_socket);
   class impl : public doorman {
   public:
-    impl(default_multiplexer& mx, native_socket sockfd)
-        : doorman(network::accept_hdl_from_socket(sockfd)),
+    impl(default_multiplexer& mx, native_socket sockfd, int64_t id)
+        : doorman(accept_handle::from_int(id)),
           acceptor_(mx, sockfd) {
       // nop
     }
@@ -988,7 +988,7 @@ doorman_ptr default_multiplexer::new_doorman(native_socket fd) {
   private:
     acceptor_impl<tcp_policy> acceptor_;
   };
-  return make_counted<impl>(*this, fd);
+  return make_counted<impl>(*this, fd, next_endpoint_id());
 }
 
 expected<doorman_ptr> default_multiplexer::new_tcp_doorman(uint16_t port,
@@ -1068,6 +1068,12 @@ dgram_servant_ptr default_multiplexer::new_dgram_servant(native_socket fd) {
     }
     uint16_t port() const override {
       auto x = remote_port_of_fd(handler_ptr_->fd());
+      if (!x)
+        return 0;
+      return *x;
+    }
+    uint16_t local_port() const override {
+      auto x = local_port_of_fd(handler_ptr_->fd());
       if (!x)
         return 0;
       return *x;
