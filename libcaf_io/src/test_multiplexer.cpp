@@ -263,7 +263,7 @@ test_multiplexer::new_remote_udp_endpoint(const std::string& host,
   abort();
 }
 
-expected<dgram_servant_ptr> 
+expected<dgram_servant_ptr>
 test_multiplexer::new_local_udp_endpoint(uint16_t desired_port,
                                          const char*, bool) {
   CAF_LOG_TRACE(CAF_ARG(desired_port));
@@ -296,14 +296,14 @@ test_multiplexer::new_local_udp_endpoint(uint16_t desired_port,
   return new_dgram_servant(hdl, port);
 }
 
-dgram_servant_ptr test_multiplexer::new_dgram_servant(dgram_handle hdl,
-                                                      uint16_t port) {
+dgram_servant_ptr test_multiplexer::new_dgram_servant(dgram_handle,
+                                                      uint16_t) {
   abort();
 }
 
 dgram_servant_ptr test_multiplexer::new_dgram_servant(dgram_handle,
-                                                      const std::string& host,
-                                                      uint16_t port) {
+                                                      const std::string&,
+                                                      uint16_t) {
   abort();
 }
 
